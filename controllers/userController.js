@@ -6,6 +6,7 @@ const User = require("../models/User");
 const SALT_ROUNDS = 10;
 const SECRET_KEY = process.env.SECRET_KEY;
 
+//Setting up nodemailer transporter
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -73,11 +74,49 @@ exports.signup = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
 
+        //checking if user does not exists
+        if (!user) {
+            return res.status(404).json({ message: "User not found, sign in" });
+        }
+        //if user exist but is not verified
+        if (user.isVerified !== true) {
+            return res.status(404).json({ message: "User not verified" });
+        }
+        //check if the password is correct
+        const isCorrectPassword = await bcrypt.compare(password, user.password);
+
+        if (isCorrectPassword) {
+            //signign the jwt token and sending as response
+            const token = jwt.sign({ userId: user._id, email: user.email }, SECRET_KEY, { expiresIn: '1h' });
+            //Storing the JWT token in the cookie
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000
+            });
+            return res.status(200).json({ message: "Success" });
+        } else {
+            res.status(401).json({ message: "Wrong credentials, please re-enter" });
+        }
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
 };
 
 exports.logout = async (req, res) => {
-
+    try {
+        //Clearing the JWT token from the cookies
+        res.clearCookie('authToken', {
+            httpOnly: true
+        });
+        res.status(200).json({ message: "You have been successfully logged out" });
+    } catch (error) {
+        res.status(500).json({ message: "Internal Server Error" });
+    }
 };
 
 exports.verify = async (req, res) => {
@@ -91,7 +130,7 @@ exports.verify = async (req, res) => {
             //verify the user
             console.log(userInformation)
             if (enteredOtp === userInformation.otp) {
-                //otp is correct
+                //otp is correct, setting isVerified to true and clearing otp
                 userInformation.otp = "";
                 userInformation.isVerified = true;
                 await userInformation.save();

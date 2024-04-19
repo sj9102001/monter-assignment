@@ -16,6 +16,15 @@ const userSchema = new mongoose.Schema({
     isVerified: {
         type: Boolean,
         default: false
+    },
+    location: {
+        type: String
+    },
+    age: {
+        type: Number
+    },
+    work_details: {
+        type: String
     }
 });
 
